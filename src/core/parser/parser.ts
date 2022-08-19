@@ -111,10 +111,28 @@ function parseProperty(propertyDeclaration: SimpleAST.PropertyDeclaration | Simp
 function parseMethod(methodDeclaration: SimpleAST.MethodDeclaration | SimpleAST.MethodSignature) : MethodDetails | undefined{
     const sym = methodDeclaration.getSymbol();
     if (sym) {
+        const returnSymbol = methodDeclaration.getReturnType().getSymbol();
+        let argumentIds: {name: string, ids: string[], type?: string}[] | undefined;
+
+        const argumentSymbols = methodDeclaration.getParameters()
+            .map(p => ({param: p, type: p.getType(), symbol: p.getType()?.getSymbol()}))
+            .filter(s => !!s.symbol)
+            .reduce((acc, val) => {
+                acc.push({name: val.param!.getName(), ids: getTypeIdsFromSymbol(val.symbol!), type: getTypeAsString(val.type)});
+                return acc;
+            }, [] as {name: string, ids: string[], type?: string}[]);
+
+        if (argumentSymbols.length) {
+            argumentIds = argumentSymbols;
+        }
+
         return {
             modifierFlags: methodDeclaration.getCombinedModifierFlags(),
             name: sym.getName(),
             returnType: getMethodTypeName(methodDeclaration),
+            returnTypeIds: returnSymbol && getTypeIdsFromSymbol(returnSymbol),
+            arguments: getMethodArguments(methodDeclaration),
+            argumentIds
         }
     }
 }
@@ -140,6 +158,7 @@ export function parseClassHeritageClauses(classDeclaration: SimpleAST.ClassDecla
     const classTypeId = classDeclaration.getSymbol()?.getFullyQualifiedName() ?? "";
     const baseClass =  classDeclaration.getBaseClass();
     const interfaces = classDeclaration.getImplements();
+    const mixins = classDeclaration.getBaseTypes();
  
     
     let heritageClauses: HeritageClause[] = [];
@@ -158,6 +177,18 @@ export function parseClassHeritageClauses(classDeclaration: SimpleAST.ClassDecla
                         classTypeId,
                         type: HeritageClauseType.Extends
             });
+        }
+    }
+    else if (className && mixins.length) {
+        // Support mixins
+        for (const mixin of mixins) {
+            heritageClauses.push({
+                clause: getTypeAsString(mixin) || '',
+                clauseTypeId: mixin.getSymbol()?.getFullyQualifiedName()!,
+                className,
+                classTypeId,
+                type: HeritageClauseType.Extends
+            })
         }
     }
 
@@ -228,6 +259,11 @@ function getPropertyTypeName(propertySymbol: SimpleAST.Symbol) {
 
 function getMethodTypeName(method: SimpleAST.MethodSignature | SimpleAST.MethodDeclaration) {
     return getTypeAsString(method.getReturnType());
+}
+
+function getMethodArguments(method: SimpleAST.MethodSignature | SimpleAST.MethodDeclaration) {
+    const args = method.getParameters();
+    return args.map(arg => getTypeAsString(arg.getType())).filter(arg => !!arg) as string[];
 }
 
 function getTypeAsString(type?: SimpleAST.Type<SimpleAST.ts.Type>): string | undefined {

@@ -11,6 +11,8 @@ export interface MethodDetails extends MemberDetails{
  
     returnType?: string;
     returnTypeIds?: string[];
+    arguments?: string[];
+    argumentIds?: {name: string, ids: string[], type?: string}[];
 }
 
 export interface PropertyDetails extends MemberDetails {

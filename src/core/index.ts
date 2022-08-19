@@ -3,7 +3,7 @@ import { getAst, parseClasses, parseInterfaces, parseEnum, parseTypes } from "./
 import { emitSingleClass, emitSingleInterface, emitHeritageClauses, postProcessSvg, emitSingleEnum, emitSingleType, emitMemberAssociations } from "./emitter";
 import { SETTINGS, TsUML2Settings } from "./tsuml2-settings";
 import chalk from 'chalk';
-import { FileDeclaration, TypeAlias } from "./model";
+import { FileDeclaration, Interface, TypeAlias } from "./model";
 import * as fs from 'fs';
 import { parseAssociations } from "./parser";
 
@@ -12,6 +12,9 @@ function parse(tsConfigPath: string, pattern: string): FileDeclaration[] {
   const files = ast.getSourceFiles();
   // parser
   console.log(chalk.yellow("parsing source files:"));
+
+  const globalInterfaces: Record<string, Interface> = {};
+
   const declarations: FileDeclaration[] = files.map(f => {
     const classes = f.getClasses();
     const interfaces = f.getInterfaces();
@@ -21,7 +24,26 @@ function parse(tsConfigPath: string, pattern: string): FileDeclaration[] {
     console.log(chalk.yellow(path));
 
     const classDeclarations = classes.map(parseClasses);
-    const interfaceDeclarations = interfaces.map(parseInterfaces);
+
+    // Interfaces support merging, so check for any existing interfaces
+    const interfaceDeclarations = interfaces.map(iface => {
+      const result = parseInterfaces(iface);
+
+      // Merge with the existing interface if it exists
+      if (globalInterfaces[result.name]) {
+        const previousInterface = globalInterfaces[result.name];
+        previousInterface.methods.push(...result.methods);
+        previousInterface.properties.push(...result.properties);
+
+        result.methods = previousInterface.methods;
+        result.properties = previousInterface.properties;
+      }
+
+      globalInterfaces[result.name] = result;
+
+      return result;
+    });
+
     return {
       fileName: path,
       classes: classDeclarations,

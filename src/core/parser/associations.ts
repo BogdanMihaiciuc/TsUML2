@@ -55,16 +55,62 @@ function parseAssociationOfAnyType(t: Clazz | Interface | TypeAlias, association
                 createReverseAssociation(ass, prop);
             }
         })
-    })
+    });
+
+    t.methods.filter(m => m.returnTypeIds?.length || m.argumentIds?.length).forEach(method => {
+        method.returnTypeIds?.forEach(id => {
+            const assId = `${t.id}_${id}`;
+            const reverseId = `${id}_${t.id}`
+            let ass = associationMap.get(reverseId);
+            if(!ass) {
+                const propType = typeMap.get(id);
+                if(!propType) {
+                    return;
+                }
+                
+                ass = new MemberAssociation(
+                    { typeId: t.id, name: t.name},
+                    { typeId: id, name: propType.name, multiplicity: getMultiplicityOfProp({type: method.returnType}) });
+                associationMap.set(assId, ass);
+                associations.push(ass);
+            } else {
+                createReverseAssociation(ass, {type: method.returnType});
+            }
+        });
+
+        method.argumentIds?.forEach(arg => {
+            if (!arg.ids.length) return;
+
+            arg.ids.forEach(id => {
+                const assId = `${t.id}_${id}`;
+                const reverseId = `${id}_${t.id}`
+                let ass = associationMap.get(reverseId);
+                if(!ass) {
+                    const propType = typeMap.get(id);
+                    if(!propType) {
+                        return;
+                    }
+                    
+                    ass = new MemberAssociation(
+                        { typeId: t.id, name: t.name},
+                        { typeId: id, name: propType.name, multiplicity: getMultiplicityOfProp({type: arg.type}) });
+                    associationMap.set(assId, ass);
+                    associations.push(ass);
+                } else {
+                    createReverseAssociation(ass, {type: arg.type});
+                }
+            });
+        });
+    });
     return associations;
 }
 
 
-function createReverseAssociation(association: MemberAssociation, prop: PropertyDetails) {
+function createReverseAssociation(association: MemberAssociation, prop: {type?: string}) {
     association.a.multiplicity = getMultiplicityOfProp(prop);
 }
 
-function getMultiplicityOfProp(prop: PropertyDetails) {
+function getMultiplicityOfProp(prop: {type?: string}) {
     if(prop.type && prop.type.includes("[")) {
         return '0..*'
     } 
